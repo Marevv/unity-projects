@@ -29,13 +29,13 @@ namespace DependencyInjection
 
 
 
-            var providers = findMonoBehaviours().OfType<IDependencyProvider>();
+            var providers = FindMonoBehaviours().OfType<IDependencyProvider>();
             foreach (var provider in providers)
             {
                 RegisterProvider(provider);
             }
 
-            var injectables = findMonoBehaviours().Where(IsInjectable);
+            var injectables = FindMonoBehaviours().Where(IsInjectable);
             foreach (var injectable in injectables)
             {
                 Inject(injectable);
@@ -62,12 +62,10 @@ namespace DependencyInjection
                 var resolvedInstance = Resolve(fieldType);
                 if (resolvedInstance == null)
                 {
-                    throw new Exception($"Failed to Inject {fieldType.Name} into {type.Name}");
+                    throw new Exception($"Failed to injecto dependency into field '{fieldType.Name}' of class '{type.Name}'");
                 }
 
                 injectableField.SetValue(instance, resolvedInstance);
-
-                Debug.Log($"Field Injected {fieldType.Name} into {type.Name}");
             }
         }
 
@@ -86,12 +84,11 @@ namespace DependencyInjection
                 var resolvedInstances = requiredParameters.Select(Resolve).ToArray();
                 if (resolvedInstances.Any(resolvedInstances => resolvedInstances == null))
                 {
-                    throw new Exception($"Failed to inject {type.Name}.{injectableMethod.Name}");
+                    throw new Exception($"Failed to injecto dependency into method '{injectableMethod.Name}' of calss '{type.Name}'");
                 }
 
 
                 injectableMethod.Invoke(instance, resolvedInstances);
-                Debug.Log($"Method Injected {type.Name}.{injectableMethod.Name}");
 
             }
         }
@@ -109,13 +106,77 @@ namespace DependencyInjection
 
                 if (resolvedInstance == null)
                 {
-                    throw new Exception($"Failed to Inject {propertyType.Name} into {type.Name}");
+                    throw new Exception($"Failed to injecto dependency into property '{propertyType.Name}' of class '{type.Name}'");
                 }
 
                 injectableProperty.SetValue(instance, resolvedInstance);
 
                 Debug.Log($"Property Injected {propertyType.Name} into {type.Name}");
             }
+        }
+
+        public void ValidateDependencies()
+        {
+            var monoBehaviours = FindMonoBehaviours();
+            var providers = monoBehaviours.OfType<IDependencyProvider>();
+            var providedDependencies = GetProvidedDependencies(providers);
+
+
+            var invalidDependencies = monoBehaviours
+                .SelectMany(mb => mb.GetType().GetFields(k_bindingFlags), (mb, field) => new { mb, field })
+                .Where(t => Attribute.IsDefined(t.field, typeof(InjectAttribute)))
+                .Where(t => !providedDependencies.Contains(t.field.FieldType) && t.field.GetValue(t.mb) == null)
+                .Select(t => $"[Validation] {t.mb.GetType().Name} is missing dependency {t.field.FieldType.Name} on GameObject {t.mb.gameObject.name}");
+
+            var invalidDependencyList = invalidDependencies.ToList();
+
+            if (!invalidDependencyList.Any())
+            {
+                Debug.Log("[Validation] All dependencies are valid.");
+            }
+            else
+            {
+                Debug.LogError($"[Validation] {invalidDependencyList.Count} dependencies are invalid:");
+                foreach (var invalidDependency in invalidDependencyList)
+                {
+                    Debug.LogError(invalidDependency);
+                }
+            }
+        }
+
+        HashSet<Type> GetProvidedDependencies(IEnumerable<IDependencyProvider> providers)
+        {
+            var providedDependencies = new HashSet<Type>();
+            foreach (var provider in providers)
+            {
+                var methods = provider.GetType().GetMethods(k_bindingFlags);
+                foreach( var method in methods)
+                {
+                    if(!Attribute.IsDefined(method, typeof(InjectAttribute))) continue;
+
+                    var returnType = method.ReturnType;
+                    providedDependencies.Add(returnType);
+                }
+            }
+
+            return providedDependencies;
+        }
+
+        public void ClearDependencies()
+        {
+            foreach(var monoBehaviour in FindMonoBehaviours())
+            {
+                var type = monoBehaviour.GetType();
+                var injectableFields = type.GetFields(k_bindingFlags)
+                    .Where(member => Attribute.IsDefined (member, typeof(InjectAttribute)));
+
+                foreach(var injectableField in injectableFields)
+                {
+                    injectableField.SetValue(monoBehaviour, null);
+                }
+            }
+
+            Debug.Log("[Injector] All injectable fields cleared");
         }
 
         object Resolve(Type type)
@@ -153,7 +214,7 @@ namespace DependencyInjection
             }
         }
 
-        static MonoBehaviour[] findMonoBehaviours()
+        static MonoBehaviour[] FindMonoBehaviours()
         {
             return FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.InstanceID);
         }
