@@ -5,7 +5,7 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Create-with-VR-Starter-Scene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   m_configObjects:
@@ -17,3 +17,4 @@ EditorBuildSettings:
       type: 2}
     xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: f4f50c8f8f3454c90a388877cf1a2c81,
       type: 2}
+  m_UseUCBPForAssetBundles: 0
